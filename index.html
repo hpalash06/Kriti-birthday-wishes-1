@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Birthday Surprise for Kriti</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --pink-bg: #fff0f3;
+            --pink-accent: #ff8fa3;
+            --pink-deep: #ff4d6d;
+            --white: #ffffff;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(-45deg, #fff0f3, #ffccd5, #fff0f3, #ffb3c1);
+            background-size: 400% 400%;
+            animation: moveGradient 15s ease infinite;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        @keyframes moveGradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .floating-heart {
+            position: fixed; bottom: -50px; color: var(--pink-accent);
+            font-size: 30px; pointer-events: none; z-index: 0;
+            animation: floatUp 6s linear forwards; opacity: 0;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0); opacity: 0; }
+            20% { opacity: 0.7; }
+            100% { transform: translateY(-100vh) scale(1.5) rotate(45deg); opacity: 0; }
+        }
+
+        #intro {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            background: var(--pink-bg); z-index: 100; transition: opacity 0.8s;
+        }
+
+        #container { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; padding-bottom: 50px; }
+
+        #message {
+            max-height: 0; opacity: 0; overflow: hidden;
+            text-align: center; padding: 0 25px; transition: all 1s ease-in-out;
+        }
+        
+        #message.active { max-height: 500px; opacity: 1; padding: 20px 25px; }
+
+        #puzzle-section { display: flex; flex-direction: column; align-items: center; width: 100%; }
+
+        #teaser-area { height: 30px; margin: 15px 0; color: var(--pink-deep); font-weight: 500; font-style: italic; }
+
+        .board {
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); /* 3 columns */
+            grid-template-rows: repeat(5, 1fr);    /* 5 rows = 9:15 ratio (close to 9:16) */
+            gap: 5px;
+            width: 85vw; 
+            max-width: 350px; 
+            aspect-ratio: 9 / 15; 
+            padding: 8px; background: var(--white); border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .tile {
+            width: 100%; height: 100%; 
+            background-size: 300% 500%; /* Matches 3x5 grid */
+            border-radius: 5px;
+            transition: transform 0.1s ease;
+        }
+
+        .empty { background: #feeaf0 !important; border: 1px dashed var(--pink-accent); }
+
+        #help-container { margin: 15px 0; opacity: 0; visibility: hidden; transition: 0.6s; text-align: center;}
+        #help-container.visible { opacity: 1; visibility: visible; }
+        
+        #actual-help-btn {
+            background: var(--pink-deep); color: white; border: none;
+            padding: 10px 25px; border-radius: 25px; font-weight: bold; cursor: pointer;
+        }
+
+        .hint-tile::after {
+            content: '➔'; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) rotate(var(--angle));
+            font-size: 2rem; color: white; text-shadow: 0 0 8px rgba(0,0,0,0.5);
+            animation: pulseHint 0.5s infinite alternate;
+        }
+
+        @keyframes pulseHint { from { opacity: 0.5; } to { opacity: 1; } }
+
+        #final-footer { display: none; flex-direction: column; align-items: center; margin-top: 20px; }
+        #final-footer.visible { display: flex; }
+    </style>
+</head>
+<body>
+
+    <div id="intro"><h1>Hii Kriti 😍❤️ </h1></div>
+
+    <div id="container">
+        <div id="message">
+            <h2 style="color: var(--pink-deep);">The day is finally here! 💅🎂</h2>
+            <p>I wish you the happiest birthday. ✨<br>
+            A very happy birthday to someone who means so much to me. 💖<br>
+            <b>Wish you many many returns of the day! 🥰💘</b></p>
+        </div>
+
+        <div id="puzzle-section">
+            <div id="teaser-area">Can you solve this surprise? 🤔</div>
+            <div class="board" id="game-board"></div>
+            <div id="help-container">
+                <p style="color: var(--pink-deep); font-size: 0.8rem;">Stuck? I can guide you! 😉</p>
+                <button id="actual-help-btn">Get Help</button>
+            </div>
+        </div>
+
+        <div id="final-footer">
+            <div style="font-size: 1.8rem; color: var(--pink-deep); font-style: italic; margin-bottom: 10px;">Happy Birthday, Kriti!</div>
+            <button onclick="downloadImage()" style="background:white; color:var(--pink-deep); border:1px solid var(--pink-deep); padding: 8px 15px; border-radius: 20px;">Save Photo</button>
+        </div>
+    </div>
+
+    <script>
+        const COLS = 3;
+        const ROWS = 5;
+        const TOTAL_TILES = COLS * ROWS;
+        const EMPTY_VAL = TOTAL_TILES - 1;
+        const imgURL = 'IMG-20260228-WA0003.jpg';
+        
+        let tiles = Array.from({length: TOTAL_TILES}, (_, i) => i);
+        let helpActive = false;
+        let isMoving = false;
+        let tStart = null;
+
+        function startHearts() {
+            const symbols = ['❤️', '💖', '✨', '🌸'];
+            setInterval(() => {
+                const h = document.createElement('div');
+                h.className = 'floating-heart';
+                h.innerText = symbols[Math.floor(Math.random() * symbols.length)];
+                h.style.left = Math.random() * 100 + 'vw';
+                document.body.appendChild(h);
+                setTimeout(() => h.remove(), 6000);
+            }, 700);
+        }
+
+        function draw() {
+            const board = document.getElementById('game-board');
+            board.innerHTML = '';
+            const emptyIdx = tiles.indexOf(EMPTY_VAL);
+            const nextMove = helpActive ? solveBFS() : null;
+
+            tiles.forEach((tile, i) => {
+                const div = document.createElement('div');
+                div.className = 'tile';
+                if (tile === EMPTY_VAL) {
+                    div.classList.add('empty');
+                } else {
+                    div.style.backgroundImage = `url('${imgURL}')`;
+                    const r = Math.floor(tile / COLS);
+                    const c = tile % COLS;
+                    div.style.backgroundPosition = `${(c / (COLS - 1)) * 100}% ${(r / (ROWS - 1)) * 100}%`;
+                    
+                    if (helpActive && i === nextMove) {
+                        div.classList.add('hint-tile');
+                        div.style.setProperty('--angle', getAngle(i, emptyIdx));
+                    }
+                    div.onclick = () => move(i);
+                }
+                board.appendChild(div);
+            });
+        }
+
+        function getAngle(t, e) {
+            if (t === e - 1) return '0deg';
+            if (t === e + 1) return '180deg';
+            if (t === e - COLS) return '90deg';
+            if (t === e + COLS) return '270deg';
+            return '0deg';
+        }
+
+        function move(idx) {
+            if (isMoving) return;
+            const e = tiles.indexOf(EMPTY_VAL);
+            const isAdj = Math.abs(Math.floor(idx/COLS)-Math.floor(e/COLS)) + Math.abs(idx%COLS-e%COLS) === 1;
+            if(isAdj) {
+                isMoving = true;
+                [tiles[idx], tiles[e]] = [tiles[e], tiles[idx]];
+                draw();
+                setTimeout(() => { 
+                    isMoving = false; 
+                    if(tiles.every((t,i) => t===i)) win(); 
+                }, 150);
+            }
+        }
+
+        function solveBFS() {
+            // Simplified "greedy" hint for larger boards to prevent lag
+            const goal = tiles.slice().sort((a,b) => a-b);
+            const emptyIdx = tiles.indexOf(EMPTY_VAL);
+            const possible = [emptyIdx-1, emptyIdx+1, emptyIdx-COLS, emptyIdx+COLS];
+            
+            let bestMove = -1;
+            let minWeight = Infinity;
+
+            possible.forEach(pos => {
+                if (pos >= 0 && pos < TOTAL_TILES) {
+                    const isAdj = Math.abs(Math.floor(pos/COLS)-Math.floor(emptyIdx/COLS)) + Math.abs(pos%COLS-emptyIdx%COLS) === 1;
+                    if(isAdj) {
+                        // Check if this move puts the tile in its correct spot
+                        const tileValue = tiles[pos];
+                        if(tileValue === pos) return; // Don't move correct tiles if possible
+                        bestMove = pos; 
+                    }
+                }
+            });
+            return bestMove;
+        }
+
+        function shuffle() {
+            for(let i=0; i<80; i++) {
+                let e = tiles.indexOf(EMPTY_VAL);
+                let n = [e-COLS, e+COLS, e-1, e+1].filter(x => 
+                    x>=0 && x<TOTAL_TILES && Math.abs(Math.floor(x/COLS)-Math.floor(e/COLS)) + Math.abs(x%COLS-e%COLS) === 1
+                );
+                let r = n[Math.floor(Math.random()*n.length)];
+                [tiles[e], tiles[r]] = [tiles[r], tiles[e]];
+            }
+        }
+
+        function win() {
+            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+            document.querySelectorAll('.tile').forEach((el, i) => {
+                el.classList.remove('empty');
+                el.style.backgroundImage = `url('${imgURL}')`;
+                const r = Math.floor(i / COLS), c = i % COLS;
+                el.style.backgroundPosition = `${(c / (COLS-1)) * 100}% ${(r / (ROWS-1)) * 100}%`;
+                el.style.border = "none";
+            });
+            setTimeout(() => {
+                document.getElementById('message').classList.add('active');
+                document.getElementById('final-footer').classList.add('visible');
+                document.getElementById('help-container').style.display = 'none';
+                document.getElementById('teaser-area').style.display = 'none';
+            }, 800);
+        }
+
+        function downloadImage() {
+            const a = document.createElement('a'); a.href = imgURL; a.download = 'Kriti_Bday.jpg'; a.click();
+        }
+
+        // Init
+        setTimeout(() => { 
+            document.getElementById('intro').style.opacity = '0'; 
+            setTimeout(() => document.getElementById('intro').style.display = 'none', 800);
+        }, 2000);
+
+        setTimeout(() => { if(!tiles.every((t,i) => t===i)) document.getElementById('help-container').classList.add('visible'); }, 25000);
+
+        document.getElementById('actual-help-btn').onclick = function() { helpActive = true; this.parentElement.style.display='none'; draw(); };
+
+        startHearts();
+        shuffle();
+        draw();
+    </script>
+</body>
+</html>
